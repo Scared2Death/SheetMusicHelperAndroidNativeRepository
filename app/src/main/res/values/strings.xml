@@ -1,9 +1,13 @@
 <resources>
+
     <string name="app_name">Sheet Music Helper</string>
     <string name="title_activity_launcher">Music Sheet Launcher</string>
-    <!--
-    This string is used for square devices and overridden by hello_world in
-    values-round/strings.xml for round devices.
-    -->
-    <string name="hello_world">Hello Square World!</string>
+
+    <string name="noPermissionsProvidedText">No permissions have been provided for the app to run ...</string>
+
+    <string name="selectSheetMusicPDFFileText">Select a sheet music pdf file to start off .</string>
+    <string name="selectFileButtonText">Browse</string>
+    <string name="startWithSampleFileButtonText">Sample</string>
+    <string name="backToMainLauncherButtonText">Back to starter page</string>
+
 </resources>

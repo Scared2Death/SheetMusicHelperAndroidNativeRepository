@@ -1,16 +1,32 @@
 package com.almadi.sheetmusichelper;
 
+import java.io.File;
 import java.util.List;
+import java.util.Arrays;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
-import android.app.Activity;
-import android.graphics.Color;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Size;
 import android.os.Bundle;
 import android.media.Image;
+import android.app.Activity;
+import android.view.View;
 import android.widget.Toast;
-import android.widget.TextView;
+import android.graphics.Color;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
+import android.os.CountDownTimer;
+import android.os.ParcelFileDescriptor;
 import android.annotation.SuppressLint;
+import android.graphics.pdf.PdfRenderer;
 
+import androidx.annotation.RawRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.camera.core.Preview;
@@ -31,15 +47,29 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import com.almadi.sheetmusichelper.enums.LogType;
 import com.almadi.sheetmusichelper.utilities.Helpers;
+import com.almadi.sheetmusichelper.utilities.Constants;
 
 public class MusicSheetHelperActivity extends AppCompatActivity
 {
     private PreviewView previewView;
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
-    private TextView textView;
+
+    private PdfRenderer pdfRenderer;
+
+    private final String SAMPLE_FILE_NAME = "test_sheet_music.pdf";
 
     private Activity currentActivityRef;
+
+    private int currentlyLoadedPDFPage = -1;
+    private int pageCount;
+
+    private final float smilingProbabilityBoundary = 0.7f;
+
+    // 2 seconds
+    private final int minimumTimeIntervalBetweenSmileDetections = 2000;
+    private boolean isSmileDetectionEnabled = true;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState)
@@ -49,6 +79,43 @@ public class MusicSheetHelperActivity extends AppCompatActivity
         currentActivityRef = this;
         Helpers.removeTitleBar(currentActivityRef);
 
+        try
+        {
+            Intent intent = getIntent();
+            Bundle intentData = intent.getExtras();
+
+            if (intentData == null || intentData.get(Constants.SELECTED_FILEURI_INTENT_DATA_KEY) == null || intentData.get(Constants.SELECTED_FILENAME_INTENT_DATA_KEY) == null)
+            {
+                File outputFilePath = new File(getCacheDir(), SAMPLE_FILE_NAME);
+                copySamplePDFFileToLocalCache(outputFilePath, R.raw.test_sheet_music);
+
+                ParcelFileDescriptor fileDescriptor = ParcelFileDescriptor.open(outputFilePath, ParcelFileDescriptor.MODE_READ_ONLY);
+
+                pdfRenderer = new PdfRenderer(fileDescriptor);
+                pageCount = pdfRenderer.getPageCount();
+            }
+            else
+            {
+                String selectedFileURIString = intentData.get(Constants.SELECTED_FILEURI_INTENT_DATA_KEY).toString();
+                Uri selectedFileURI = Uri.parse(selectedFileURIString);
+
+                String selectedFileName = intentData.get(Constants.SELECTED_FILENAME_INTENT_DATA_KEY).toString();
+                File outputFilePath = new File(getCacheDir(), selectedFileName);
+
+                copyStoragePDFFileToLocalCache(selectedFileURI, outputFilePath);
+
+                ParcelFileDescriptor fileDescriptor = ParcelFileDescriptor.open(outputFilePath, ParcelFileDescriptor.MODE_READ_ONLY);
+
+                pdfRenderer = new PdfRenderer(fileDescriptor);
+                pageCount = pdfRenderer.getPageCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            Helpers.showToastNotification(this, "Error while trying to load pdf ...", Toast.LENGTH_LONG);
+            Helpers.log(LogType.ERROR, String.format("Error while trying to load pdf with the following details: %s", ex.getStackTrace()));
+        }
+
         setContentView(R.layout.activity_music_sheet_helper);
     }
 
@@ -57,10 +124,27 @@ public class MusicSheetHelperActivity extends AppCompatActivity
     {
         super.onResume();
 
-        Helpers.hideNavBarAndStatusBar(currentActivityRef);
         Helpers.setStatusBarColor(currentActivityRef, Color.BLACK);
 
         startCameraFeedAndAnalysisActivities();
+
+        try
+        {
+            displayPDFPage(0);
+        }
+        catch (Exception ex)
+        {
+            Helpers.showToastNotification(this, "Error while trying to display pdf page ...", Toast.LENGTH_LONG);
+            Helpers.log(LogType.ERROR, String.format("Error while trying to display pdf page with the following details: %s", ex.getStackTrace()));
+        }
+    }
+
+    @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+
+        if (pdfRenderer != null) pdfRenderer.close();
     }
 
     private void startCameraFeedAndAnalysisActivities()
@@ -125,24 +209,31 @@ public class MusicSheetHelperActivity extends AppCompatActivity
                     FaceDetector faceDetector = FaceDetection.getClient(options);
 
                     faceDetector.process(image)
-                            .addOnSuccessListener(
-                                    new OnSuccessListener<List<Face>>()
-                                    {
-                                        @Override
-                                        public void onSuccess(List<Face> faces)
-                                        {
-                                            if (!faces.isEmpty())
+                            .addOnSuccessListener
+                                    (
+                                            new OnSuccessListener<List<Face>>()
                                             {
-                                                processDetectedFaces(faces);
+                                                @Override
+                                                public void onSuccess(List<Face> faces)
+                                                {
+                                                    if (!faces.isEmpty())
+                                                    {
+                                                        processDetectedFaces(faces);
+                                                    }
+                                                    else
+                                                    {
+                                                        Helpers.log(LogType.INFORMATION, "No faces detected .");
+                                                    }
+
+                                                    imageProxy.close();
+                                                }
                                             }
-                                            else
-                                            {
-                                                Helpers.showToastNotification(getApplicationContext(),"No faces detected .", Toast.LENGTH_SHORT);
-                                            }
-                                        }
-                                    })
-                            .addOnFailureListener(e -> Helpers.showToastNotification(getApplicationContext(), e.getStackTrace().toString(), Toast.LENGTH_LONG)
-                            );
+                                    )
+                            .addOnFailureListener
+                                    (
+                                            e -> Helpers.log(LogType.ERROR, e.getStackTrace().toString())
+                                    );
+
                 }
             }
         });
@@ -152,9 +243,115 @@ public class MusicSheetHelperActivity extends AppCompatActivity
 
     private void processDetectedFaces(List<Face> faces)
     {
-        int faceCount = faces.size();
+        if (!isSmileDetectionEnabled)
+        {
+            return;
+        }
+        else
+        {
+            Face faceDetected = faces.get(0);
 
-        Helpers.showToastNotification(getApplicationContext(), String.format("Number of faces detected: %s", faceCount), Toast.LENGTH_SHORT);
+            float smilingProbability = faceDetected.getSmilingProbability();
+
+            if (smilingProbability >= smilingProbabilityBoundary)
+            {
+                isSmileDetectionEnabled = false;
+
+                new CountDownTimer(minimumTimeIntervalBetweenSmileDetections, 1000)
+                {
+                    public void onTick(long millisUntilFinished) { }
+
+                    public void onFinish()
+                    {
+                        isSmileDetectionEnabled = true;
+                    }
+                }.start();
+
+                // NUMBER OF PAGES IS E.G. 13, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
+                if (currentlyLoadedPDFPage < pageCount - 1)
+                {
+                    try
+                    {
+                        displayPDFPage(++currentlyLoadedPDFPage);
+                    }
+                    catch (Exception ex)
+                    {
+                        Helpers.showToastNotification(this, "Error while trying to jump to the next pdf page ...", Toast.LENGTH_LONG);
+                        Helpers.log(LogType.ERROR, String.format("Error while trying to jump to the next pdf page with the following details: %s", ex.getStackTrace()));
+                    }
+                }
+                else
+                {
+                    showEndOfSheetMusicContent();
+                }
+            }
+        }
+    }
+
+    private void displayPDFPage(int pageNumber) throws IOException
+    {
+        PdfRenderer.Page pdfPage = pdfRenderer.openPage(pageNumber);
+
+        Bitmap bitmap = Bitmap.createBitmap(pdfPage.getWidth(), pdfPage.getHeight(), Bitmap.Config.ARGB_8888);
+
+        pdfPage.render(bitmap, null, null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+
+        ImageView pdfImageView = findViewById(R.id.pdfImageView);
+        pdfImageView.setImageBitmap(bitmap);
+
+        currentlyLoadedPDFPage = pageNumber;
+
+        pdfPage.close();
+    }
+
+    private void copySamplePDFFileToLocalCache(File outputFilePath, @RawRes int pdfResource) throws IOException
+    {
+        InputStream inputStream = getResources().openRawResource(pdfResource);
+
+        processWriteProcedureToLocalCache(inputStream, outputFilePath);
+    }
+
+    private void copyStoragePDFFileToLocalCache(Uri inputFileURI, File outputFilePath) throws IOException
+    {
+        InputStream inputStream = getContentResolver().openInputStream(inputFileURI);
+
+        processWriteProcedureToLocalCache(inputStream, outputFilePath);
+    }
+
+    private void processWriteProcedureToLocalCache(InputStream inputStream, File outputFilePath) throws IOException
+    {
+        if (!outputFilePath.exists())
+        {
+            FileOutputStream fileOutputStream = new FileOutputStream(outputFilePath);
+
+            byte[] buffer = new byte[1024];
+
+            int size;
+            while ((size = inputStream.read(buffer)) != -1)
+            {
+                fileOutputStream.write(buffer, 0, size);
+            }
+
+            inputStream.close();
+            fileOutputStream.close();
+        }
+    }
+
+    private void showEndOfSheetMusicContent()
+    {
+        findViewById(R.id.previewViewFrameLayout).setVisibility(View.GONE);
+        findViewById(R.id.pdfImageView).setVisibility(View.GONE);
+
+        findViewById(R.id.endOfSheetMusicLinearLayout).setVisibility(View.VISIBLE);
+
+        findViewById(R.id.returnToMainLauncherButton).setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                Helpers.navigateToActivity(getApplicationContext(), LauncherActivity.class, Arrays.asList(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+        });
     }
 
 }

@@ -8,23 +8,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
+        android:label="Sheet Music Helper"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SheetMusicHelper"
 
-        tools:remove="android:appComponentFactory"
-        >
-
-        <!--
-               Set to true if your app is Standalone, that is, it does not require the handheld
-               app to run.
-        -->
-
-        <activity
-            android:name=".MusicSheetHelperActivity">
-        </activity>
+        tools:remove="android:appComponentFactory">
+        <activity android:name=".NoPermissionsProvidedActivity" />
+        <activity android:name=".MusicSheetHelperActivity" />
         <activity android:name=".LauncherActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

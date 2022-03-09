@@ -1,21 +1,29 @@
 package com.almadi.sheetmusichelper.utilities;
 
+import android.util.Log;
 import android.view.View;
-import android.app.Activity;
 import android.view.Window;
-import android.view.WindowManager;
+import android.app.Activity;
 import android.widget.Toast;
+import android.content.Intent;
 import android.content.Context;
 import android.app.AlertDialog;
+import android.view.WindowManager;
 import android.content.DialogInterface;
 
 import androidx.core.content.ContextCompat;
+
+import com.almadi.sheetmusichelper.enums.LogType;
+import com.almadi.sheetmusichelper.models.IntentData;
+import com.almadi.sheetmusichelper.MusicSheetHelperActivity;
+
+import java.util.List;
 
 public class Helpers
 {
     public static void showToastNotification(Context context, String message, int duration)
     {
-        Toast.makeText(context, message, duration);
+        Toast.makeText(context, message, duration).show();
     }
 
     public static void hideNavBarAndStatusBar(Activity activity)
@@ -62,6 +70,43 @@ public class Helpers
 
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.setStatusBarColor(color);
+    }
+
+    public static void log(LogType logType, String message)
+    {
+        switch (logType)
+        {
+            case INFORMATION:
+                Log.i("[INFORMATION]", message);
+                break;
+
+            case ERROR:
+                Log.e("[ERROR]", message);
+                break;
+        }
+    }
+
+    public static void navigateToActivity(Context context, Class targetClass, List<Integer> flags, IntentData... intentData)
+    {
+        Intent intent = new Intent(context, targetClass);
+
+        if (!flags.isEmpty())
+        {
+            for (int flag: flags)
+            {
+                intent.setFlags(flag);
+            }
+        }
+
+        if (intentData.length > 0)
+        {
+            for (IntentData data: intentData)
+            {
+                intent.putExtra(data.Key, data.Value);
+            }
+        }
+
+        context.startActivity(intent);
     }
 
 }

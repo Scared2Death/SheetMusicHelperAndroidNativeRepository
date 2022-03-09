@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId "com.almadi.sheetmusichelper"
         minSdkVersion 24
-        targetSdkVersion 30
+        targetSdkVersion 31
         versionCode 1
         versionName "1.0"
 
@@ -31,6 +31,8 @@ android {
 
 dependencies {
     implementation 'com.google.mlkit:face-detection:16.1.5'
+    implementation 'androidx.navigation:navigation-fragment:2.2.2'
+    implementation 'androidx.navigation:navigation-ui:2.2.2'
 
     def camerax_version = "1.1.0-beta01"
     implementation "androidx.camera:camera-view:1.0.0-alpha14"
