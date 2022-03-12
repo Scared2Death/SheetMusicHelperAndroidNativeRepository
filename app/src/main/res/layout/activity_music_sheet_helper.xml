@@ -11,8 +11,6 @@
         android:id="@+id/previewViewFrameLayout"
         android:layout_width="100dp"
         android:layout_height="100dp"
-        android:layout_marginTop="0dp"
-        android:layout_marginStart="0dp"
         android:visibility="visible" >
 
     <androidx.camera.view.PreviewView
@@ -20,7 +18,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="25dp"
-        android:layout_marginLeft="25dp"/>
+        android:layout_marginLeft="25dp">
+
+    </androidx.camera.view.PreviewView>
 
     </FrameLayout>
 

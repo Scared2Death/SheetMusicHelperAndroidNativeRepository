@@ -5,12 +5,9 @@ import java.util.List;
 import java.util.Arrays;
 import java.io.InputStream;
 import java.io.IOException;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 import android.net.Uri;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Size;
 import android.os.Bundle;
 import android.media.Image;
@@ -50,6 +47,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.almadi.sheetmusichelper.enums.LogType;
 import com.almadi.sheetmusichelper.utilities.Helpers;
 import com.almadi.sheetmusichelper.utilities.Constants;
+import com.google.mlkit.vision.face.FaceLandmark;
 
 public class MusicSheetHelperActivity extends AppCompatActivity
 {
@@ -66,10 +64,11 @@ public class MusicSheetHelperActivity extends AppCompatActivity
     private int pageCount;
 
     private final float smilingProbabilityBoundary = 0.7f;
+    private final float leftEyeClosedProbabilityBoundary = 0.7f;
 
     // 2 seconds
-    private final int minimumTimeIntervalBetweenSmileDetections = 2000;
-    private boolean isSmileDetectionEnabled = true;
+    private final int minimumTimeIntervalBetweenDetections = 2000;
+    private boolean isDetectionEnabled = true;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState)
@@ -243,7 +242,7 @@ public class MusicSheetHelperActivity extends AppCompatActivity
 
     private void processDetectedFaces(List<Face> faces)
     {
-        if (!isSmileDetectionEnabled)
+        if (!isDetectionEnabled)
         {
             return;
         }
@@ -252,38 +251,73 @@ public class MusicSheetHelperActivity extends AppCompatActivity
             Face faceDetected = faces.get(0);
 
             float smilingProbability = faceDetected.getSmilingProbability();
+            float leftEyeOpenProbability = faceDetected.getLeftEyeOpenProbability();
+            float leftEyeClosedProbability = 1 - leftEyeOpenProbability;
 
-            if (smilingProbability >= smilingProbabilityBoundary)
+            if (smilingProbability >= smilingProbabilityBoundary || leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary)
             {
-                isSmileDetectionEnabled = false;
+                // IN CASE BOTH ARE DETECTED, NO HANDLING IS CARRIED OUT
+                if (smilingProbability >= smilingProbabilityBoundary && leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary) return;
 
-                new CountDownTimer(minimumTimeIntervalBetweenSmileDetections, 1000)
+                isDetectionEnabled = false;
+
+                boolean isSmilingDetection = smilingProbability > leftEyeClosedProbability;
+                boolean isLeftEyeClosedDetection = !isSmilingDetection;
+
+                new CountDownTimer(minimumTimeIntervalBetweenDetections, 1000)
                 {
                     public void onTick(long millisUntilFinished) { }
 
                     public void onFinish()
                     {
-                        isSmileDetectionEnabled = true;
+                        isDetectionEnabled = true;
                     }
                 }.start();
 
-                // NUMBER OF PAGES IS E.G. 13, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
-                if (currentlyLoadedPDFPage < pageCount - 1)
-                {
-                    try
-                    {
-                        displayPDFPage(++currentlyLoadedPDFPage);
-                    }
-                    catch (Exception ex)
-                    {
-                        Helpers.showToastNotification(this, "Error while trying to jump to the next pdf page ...", Toast.LENGTH_LONG);
-                        Helpers.log(LogType.ERROR, String.format("Error while trying to jump to the next pdf page with the following details: %s", ex.getStackTrace()));
-                    }
-                }
-                else
-                {
-                    showEndOfSheetMusicContent();
-                }
+                if (isSmilingDetection) handleSmileDetection();
+                else if (isLeftEyeClosedDetection) handleLeftEyeClosedDetection();
+            }
+        }
+    }
+
+    private void handleSmileDetection()
+    {
+        // NUMBER OF PAGES IS E.G. 15, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
+        if (currentlyLoadedPDFPage < pageCount - 1)
+        {
+            try
+            {
+                displayPDFPage(++currentlyLoadedPDFPage);
+            }
+            catch (Exception ex)
+            {
+                Helpers.showToastNotification(this, "Error while trying to jump to the next pdf page ...", Toast.LENGTH_LONG);
+                Helpers.log(LogType.ERROR, String.format("Error while trying to jump to the next pdf page with the following details: %s", ex.getStackTrace()));
+            }
+        }
+        else
+        {
+            showEndOfSheetMusicContent();
+        }
+    }
+
+    private void handleLeftEyeClosedDetection()
+    {
+        // NUMBER OF PAGES IS E.G. 15, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
+        if (currentlyLoadedPDFPage == 0)
+        {
+            // Helpers.showToastNotification(this, "You're on page #1 ...", Toast.LENGTH_SHORT);
+        }
+        else
+        {
+            try
+            {
+                displayPDFPage(--currentlyLoadedPDFPage);
+            }
+            catch (Exception ex)
+            {
+                Helpers.showToastNotification(this, "Error while trying to jump to the previous pdf page ...", Toast.LENGTH_LONG);
+                Helpers.log(LogType.ERROR, String.format("Error while trying to jump to the previous pdf page with the following details: %s", ex.getStackTrace()));
             }
         }
     }
