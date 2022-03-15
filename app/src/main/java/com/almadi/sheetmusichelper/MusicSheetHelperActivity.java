@@ -62,6 +62,8 @@ public class MusicSheetHelperActivity extends AppCompatActivity
     private int currentlyLoadedPDFPage = -1;
     private int pageCount;
 
+    private boolean isMainContentHidden = false;
+
     private final float smilingProbabilityBoundary = 0.7f;
     // private final float leftEyeClosedProbabilityBoundary = 0.7f;
     private final float headLeftTiltAmountBoundary = -25f;
@@ -305,7 +307,7 @@ public class MusicSheetHelperActivity extends AppCompatActivity
         }
         else
         {
-            showEndOfSheetMusicContent();
+            replaceContentToEndOfSheetMusicContent();
         }
     }
 
@@ -337,7 +339,18 @@ public class MusicSheetHelperActivity extends AppCompatActivity
         {
             try
             {
-                displayPDFPage(--currentlyLoadedPDFPage);
+                // WE'VE REACHED THE END OF MUSIC SHEET CONTENT
+                if (isMainContentHidden)
+                {
+                    displayPDFPage(currentlyLoadedPDFPage);
+
+                    hideEndOfSheetMusicContent();
+                    showMainContent();
+                }
+                else
+                {
+                    displayPDFPage(--currentlyLoadedPDFPage);
+                }
             }
             catch (Exception ex)
             {
@@ -396,21 +409,41 @@ public class MusicSheetHelperActivity extends AppCompatActivity
         }
     }
 
-    private void showEndOfSheetMusicContent()
+    private void replaceContentToEndOfSheetMusicContent()
     {
-        findViewById(R.id.previewViewFrameLayout).setVisibility(View.GONE);
-        findViewById(R.id.pdfImageView).setVisibility(View.GONE);
+        hideMainContent();
 
         findViewById(R.id.endOfSheetMusicLinearLayout).setVisibility(View.VISIBLE);
 
         findViewById(R.id.returnToMainLauncherButton).setOnClickListener(new View.OnClickListener()
         {
             @Override
-            public void onClick(View v)
+            public void onClick(View view)
             {
                 Helpers.navigateToActivity(getApplicationContext(), LauncherActivity.class, Arrays.asList(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
         });
+    }
+
+    private void hideMainContent()
+    {
+        isMainContentHidden = true;
+
+        findViewById(R.id.previewViewFrameLayout).setVisibility(View.GONE);
+        findViewById(R.id.pdfImageView).setVisibility(View.GONE);
+    }
+
+    private void showMainContent()
+    {
+        isMainContentHidden = false;
+
+        findViewById(R.id.previewViewFrameLayout).setVisibility(View.VISIBLE);
+        findViewById(R.id.pdfImageView).setVisibility(View.VISIBLE);
+    }
+
+    private void hideEndOfSheetMusicContent()
+    {
+        findViewById(R.id.endOfSheetMusicLinearLayout).setVisibility(View.GONE);
     }
 
 }
