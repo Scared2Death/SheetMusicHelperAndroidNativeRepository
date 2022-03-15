@@ -47,7 +47,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.almadi.sheetmusichelper.enums.LogType;
 import com.almadi.sheetmusichelper.utilities.Helpers;
 import com.almadi.sheetmusichelper.utilities.Constants;
-import com.google.mlkit.vision.face.FaceLandmark;
 
 public class MusicSheetHelperActivity extends AppCompatActivity
 {
@@ -64,7 +63,8 @@ public class MusicSheetHelperActivity extends AppCompatActivity
     private int pageCount;
 
     private final float smilingProbabilityBoundary = 0.7f;
-    private final float leftEyeClosedProbabilityBoundary = 0.7f;
+    // private final float leftEyeClosedProbabilityBoundary = 0.7f;
+    private final float headLeftTiltAmountBoundary = -25f;
 
     // 2 seconds
     private final int minimumTimeIntervalBetweenDetections = 2000;
@@ -251,18 +251,25 @@ public class MusicSheetHelperActivity extends AppCompatActivity
             Face faceDetected = faces.get(0);
 
             float smilingProbability = faceDetected.getSmilingProbability();
-            float leftEyeOpenProbability = faceDetected.getLeftEyeOpenProbability();
-            float leftEyeClosedProbability = 1 - leftEyeOpenProbability;
+            float headLeftTiltAmount = faceDetected.getHeadEulerAngleZ();
 
-            if (smilingProbability >= smilingProbabilityBoundary || leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary)
+            // DOESN'T SEEM TO WORK THAT ACCURATELY
+            // float leftEyeOpenProbability = faceDetected.getLeftEyeOpenProbability();
+            // float leftEyeClosedProbability = 1 - leftEyeOpenProbability;
+
+            // boolean isSmilingDetection = smilingProbability > leftEyeClosedProbability;
+            // boolean isLeftEyeClosedDetection = !isSmilingDetection;
+            boolean isSmilingDetection = smilingProbability >= smilingProbabilityBoundary;
+            boolean isHeadLeftTiltDetection = headLeftTiltAmount <= headLeftTiltAmountBoundary;
+
+            // if (smilingProbability >= smilingProbabilityBoundary || leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary)
+            if (isSmilingDetection || isHeadLeftTiltDetection)
             {
                 // IN CASE BOTH ARE DETECTED, NO HANDLING IS CARRIED OUT
-                if (smilingProbability >= smilingProbabilityBoundary && leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary) return;
+                // if (smilingProbability >= smilingProbabilityBoundary && leftEyeClosedProbability >= leftEyeClosedProbabilityBoundary) return;
+                if (isSmilingDetection && isHeadLeftTiltDetection) return;
 
                 isDetectionEnabled = false;
-
-                boolean isSmilingDetection = smilingProbability > leftEyeClosedProbability;
-                boolean isLeftEyeClosedDetection = !isSmilingDetection;
 
                 new CountDownTimer(minimumTimeIntervalBetweenDetections, 1000)
                 {
@@ -275,7 +282,8 @@ public class MusicSheetHelperActivity extends AppCompatActivity
                 }.start();
 
                 if (isSmilingDetection) handleSmileDetection();
-                else if (isLeftEyeClosedDetection) handleLeftEyeClosedDetection();
+                // else if (isLeftEyeClosedDetection) handleLeftEyeClosedDetection();
+                else if (isHeadLeftTiltDetection) handleHeadLeftTiltDetection();
             }
         }
     }
@@ -304,9 +312,26 @@ public class MusicSheetHelperActivity extends AppCompatActivity
     private void handleLeftEyeClosedDetection()
     {
         // NUMBER OF PAGES IS E.G. 15, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
+        if (currentlyLoadedPDFPage != 0)
+        {
+            try
+            {
+                displayPDFPage(--currentlyLoadedPDFPage);
+            }
+            catch (Exception ex)
+            {
+                Helpers.showToastNotification(this, "Error while trying to jump to the previous pdf page ...", Toast.LENGTH_LONG);
+                Helpers.log(LogType.ERROR, String.format("Error while trying to jump to the previous pdf page with the following details: %s", ex.getStackTrace()));
+            }
+        }
+    }
+
+    private void handleHeadLeftTiltDetection()
+    {
+        // NUMBER OF PAGES IS E.G. 15, BUT THE PdfRenderer OBJECT INDEXES PAGES FROM 0 ...
         if (currentlyLoadedPDFPage == 0)
         {
-            // Helpers.showToastNotification(this, "You're on page #1 ...", Toast.LENGTH_SHORT);
+            Helpers.showToastNotification(this, "You're on page #1 ...", Toast.LENGTH_SHORT);
         }
         else
         {
